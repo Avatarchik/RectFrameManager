@@ -6,7 +6,7 @@ using UnityEngine;
 namespace RectFrames
 {
 
-    public class RectFrameServer : MonoBehaviour
+    public class RectFrameLayouter : MonoBehaviour
     {
         [SerializeField]
         float m_dpi = 72.0f;
@@ -24,6 +24,55 @@ namespace RectFrames
 
         (int, int) m_screenSize;
 
+        [SerializeField]
+        uWindowCapture.UwcWindowTextureManager m_manager;
+
+        Dictionary<uWindowCapture.UwcWindowTexture, RectFrame> m_windowMap = new Dictionary<uWindowCapture.UwcWindowTexture, RectFrame>();
+
+        RectFrame CreateFrameForWindow(uWindowCapture.UwcWindowTexture texture)
+        {
+            var go = new GameObject(texture.window.title);
+            var frame = go.AddComponent<RectFrame>();
+            frame.Collider = texture.GetComponent<Collider>();
+            m_frames.Add(frame);
+            frame.transform.SetParent(m_topLeft);
+            // frame.Setup(GetColor(i));
+            texture.transform.SetParent(frame.transform);
+            // frame.SetPosition();
+            // frame.RandomPosition(factor, i, m_ortho.pixelWidth, m_ortho.pixelHeight);
+
+            m_frameMap.Add(frame.Collider.transform, frame);
+            return frame;
+        }
+
+        void UpdateWindows()
+        {
+            // var pos = Vector3.zero;
+            foreach (var kv in m_manager.windows)
+            {
+                var windowTexture = kv.Value;
+                windowTexture.scaleControlType = uWindowCapture.WindowTextureScaleControlType.Manual;
+                if (!m_windowMap.TryGetValue(windowTexture, out RectFrame frame))
+                {
+                    frame = CreateFrameForWindow(windowTexture);
+                    frame.transform.localScale = new Vector3(m_factor, m_factor, 1.0f);
+                    m_windowMap.Add(windowTexture, frame);
+                }
+                // frame.SetFrameSize(windowTexture.transform, windowTexture.window.rawWidth, windowTexture.window.rawHeight);
+                var w = windowTexture.window.rawWidth;
+                var h = windowTexture.window.rawHeight;
+                var t = windowTexture.transform;
+                // if (t.localScale.x != w || t.localScale.y != h)
+                {
+                    // Debug.Log($"window: {w} x {h}");
+                    windowTexture.transform.localScale = new Vector3(w, h, 1);
+                    windowTexture.transform.localPosition = new Vector3(w / 2, -h / 2, 0);
+                }
+            }
+        }
+
+        float m_factor = 1.0f;
+
         void SetScreenSize()
         {
             int width = m_ortho.pixelWidth;
@@ -36,10 +85,10 @@ namespace RectFrames
             m_screenSize.Item2 = height;
             Debug.Log($"update screen size: {width} x {height}");
 
-            var factor = 1.0f / m_dpi;
-            m_ortho.orthographicSize = height * factor / 2;
+            m_factor = 1.0f / m_dpi;
+            m_ortho.orthographicSize = height * m_factor / 2;
 
-            m_topLeft.localPosition = new Vector3(-width / 2, height / 2);
+            m_topLeft.localPosition = new Vector3(-width / 2 * m_factor, height / 2 * m_factor);
         }
 
         List<Color> m_colors = new List<Color>
@@ -87,10 +136,10 @@ namespace RectFrames
 
             Debug.Log("OnEnable");
             var factor = 1.0f / m_dpi;
-            for (int i = 0; i < m_count; ++i)
-            {
-                CreateRandomFrame(factor, $"Frame:{i}", i + 1);
-            }
+            // for (int i = 0; i < m_count; ++i)
+            // {
+            //     CreateRandomFrame(factor, $"Frame:{i}", i + 1);
+            // }
         }
 
         void OnDisable()
@@ -120,10 +169,14 @@ namespace RectFrames
             {
                 m_hover = null;
             }
+            else if (m_frameMap.TryGetValue(hit.transform, out RectFrame frame))
+            {
+                m_hover = frame;
+                Debug.Log($"{m_hover.name} => {hit.distance}");
+            }
             else
             {
-                m_hover = m_frameMap[hit.transform];
-                Debug.Log($"{m_hover.name} => {hit.distance}");
+                Debug.Log($"{hit.transform.name} => {hit.distance}");
             }
         }
 
@@ -178,6 +231,9 @@ namespace RectFrames
 
         void Update()
         {
+            UpdateWindows();
+
+            //
             SetScreenSize();
 
             var factor = 1.0f / m_dpi;

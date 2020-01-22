@@ -10,13 +10,7 @@ namespace RectFrames
         [SerializeField]
         Transform m_rect;
 
-        public Collider Collider
-        {
-            get
-            {
-                return m_rect.GetComponent<Collider>();
-            }
-        }
+        public Collider Collider;
 
         public void Setup(Color color)
         {
@@ -26,9 +20,11 @@ namespace RectFrames
             var m = new Material(Shader.Find("Unlit/Color"));
             m.color = color;
             renderer.sharedMaterial = m;
+
+            Collider = m_rect.GetComponent<Collider>();
         }
 
-        void SetFramePosition(float factor, int x, int y, int z)
+        public void SetFramePosition(float factor, int x, int y, int z)
         {
             transform.localPosition = new Vector3(
                 x * factor,
@@ -37,7 +33,7 @@ namespace RectFrames
             transform.localScale = new Vector3(factor, factor, 1.0f);
         }
 
-        void SetFrameSize(float factor, Transform t, int w, int h)
+        public void SetFrameSize(Transform t, int w, int h)
         {
             t.localScale = new Vector3(w, h, 1);
             t.localPosition = new Vector3(w / 2, -h / 2, 0);
@@ -48,7 +44,7 @@ namespace RectFrames
         {
             int w = Random.Range(50, screenWidth);
             int h = Random.Range(50, screenHeight);
-            SetFrameSize(factor, m_rect, w, h);
+            SetFrameSize(m_rect, w, h);
 
             int x = Random.Range(0, screenWidth - w);
             int y = Random.Range(0, screenHeight - h);
