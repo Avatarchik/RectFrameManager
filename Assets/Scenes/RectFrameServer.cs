@@ -20,11 +20,13 @@ namespace RectFrames
         List<RectFrame> m_frames = new List<RectFrame>();
         Dictionary<Transform, RectFrame> m_frameMap = new Dictionary<Transform, RectFrame>();
 
+        Transform m_topLeft;
+
         (int, int) m_screenSize;
 
         void SetScreenSize()
         {
-            int width = m_ortho.pixelWidth; ;
+            int width = m_ortho.pixelWidth;
             int height = m_ortho.pixelHeight;
             if (m_screenSize.Item1 == width && m_screenSize.Item2 == height)
             {
@@ -36,6 +38,8 @@ namespace RectFrames
 
             var factor = 1.0f / m_dpi;
             m_ortho.orthographicSize = height * factor / 2;
+
+            m_topLeft.localPosition = new Vector3(-width / 2, height / 2);
         }
 
         List<Color> m_colors = new List<Color>
@@ -59,7 +63,7 @@ namespace RectFrames
             var go = new GameObject(name);
             var frame = go.AddComponent<RectFrame>();
             m_frames.Add(frame);
-            frame.transform.SetParent(m_ortho.transform);
+            frame.transform.SetParent(m_topLeft);
             frame.Setup(GetColor(i));
             frame.RandomPosition(factor, i, m_ortho.pixelWidth, m_ortho.pixelHeight);
 
@@ -72,6 +76,9 @@ namespace RectFrames
             {
                 m_ortho = Camera.main;
             }
+
+            m_topLeft = new GameObject("origin").transform;
+            m_topLeft.SetParent(m_ortho.transform);
         }
 
         void OnEnable()

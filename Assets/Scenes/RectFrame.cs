@@ -50,10 +50,10 @@ namespace RectFrames
             int h = Random.Range(50, screenHeight);
             SetFrameSize(factor, m_rect, w, h);
 
-            int x = Random.Range(-screenWidth / 2, screenWidth / 2 - w);
-            int y = Random.Range(-screenHeight / 2 + h, screenHeight / 2);
+            int x = Random.Range(0, screenWidth - w);
+            int y = Random.Range(0, screenHeight - h);
             Debug.Log($"SetPostion: [{x}/{screenWidth}, {y}/{screenHeight}, {z}] x {factor}");
-            SetFramePosition(factor, x, y, z);
+            SetFramePosition(factor, x, -y, z);
         }
 
         public void SetZOrder(int z)
