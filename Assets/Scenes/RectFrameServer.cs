@@ -1,5 +1,5 @@
-﻿using System.Collections;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 
@@ -18,25 +18,24 @@ namespace RectFrames
         Camera m_ortho;
 
         List<RectFrame> m_frames = new List<RectFrame>();
+        Dictionary<Transform, RectFrame> m_frameMap = new Dictionary<Transform, RectFrame>();
 
         (int, int) m_screenSize;
 
-        void SetScreenSize(int width, int height)
+        void SetScreenSize()
         {
+            int width = m_ortho.pixelWidth; ;
+            int height = m_ortho.pixelHeight;
             if (m_screenSize.Item1 == width && m_screenSize.Item2 == height)
             {
                 return;
             }
             m_screenSize.Item1 = width;
             m_screenSize.Item2 = height;
+            Debug.Log($"update screen size: {width} x {height}");
 
             var factor = 1.0f / m_dpi;
-            m_ortho.orthographicSize = Screen.height * factor * 0.5f; ;
-
-            foreach (var frame in m_frames)
-            {
-                // frame.transform.localScale = new Vector3(factor, factor, 1.0f);
-            }
+            m_ortho.orthographicSize = height * factor / 2;
         }
 
         List<Color> m_colors = new List<Color>
@@ -55,50 +54,16 @@ namespace RectFrames
             return m_colors[i % m_colors.Count];
         }
 
-        void CreateRandomFrame(string name, int i)
+        void CreateRandomFrame(float factor, string name, int i)
         {
             var go = new GameObject(name);
-
-            var rect = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            rect.transform.SetParent(go.transform);
-
             var frame = go.AddComponent<RectFrame>();
-            LayoutFrame(frame, rect.transform, i);
             m_frames.Add(frame);
             frame.transform.SetParent(m_ortho.transform);
+            frame.Setup(GetColor(i));
+            frame.RandomPosition(factor, i, m_ortho.pixelWidth, m_ortho.pixelHeight);
 
-            var renderer = rect.GetComponent<Renderer>();
-            var m = new Material(Shader.Find("Unlit/Color"));
-            m.color = GetColor(i);
-            renderer.sharedMaterial = m;
-        }
-
-        void SetFramePosition(Transform t, int x, int y, int z)
-        {
-            var factor = 1.0f / m_dpi;
-            t.localPosition = new Vector3(
-                (x - Screen.width / 2) * factor,
-                (y + Screen.height / 2) * factor,
-                z);
-            t.localScale = new Vector3(factor, factor, 1.0f);
-        }
-
-        void SetFrameSize(Transform t, int w, int h)
-        {
-            var factor = 1.0f / m_dpi;
-            t.localScale = new Vector3(w, h, 1);
-            t.localPosition = new Vector3(w / 2, -h / 2, 0);
-        }
-
-        void LayoutFrame(RectFrame frame, Transform rect, int z)
-        {
-            int x = Random.Range(0, Screen.width);
-            int y = Random.Range(0, Screen.height);
-            SetFramePosition(frame.transform, x, y, z);
-
-            int w = Random.Range(300, 1000);
-            int h = Random.Range(300, 1000);
-            SetFrameSize(rect, w, h);
+            m_frameMap.Add(frame.Collider.transform, frame);
         }
 
         void Awake()
@@ -109,23 +74,139 @@ namespace RectFrames
             }
         }
 
-        void Start()
+        void OnEnable()
         {
+            SetScreenSize();
+
+            Debug.Log("OnEnable");
+            var factor = 1.0f / m_dpi;
             for (int i = 0; i < m_count; ++i)
             {
-                CreateRandomFrame($"Frame:{i}", i + 1);
+                CreateRandomFrame(factor, $"Frame:{i}", i + 1);
             }
         }
 
+        void OnDisable()
+        {
+            Debug.Log("OnDisable");
+            foreach (var f in m_frames)
+            {
+                if (f)
+                {
+                    GameObject.Destroy(f.gameObject);
+                }
+            }
+            m_frames.Clear();
+        }
+
+        Transform m_lastHit;
+        RectFrame m_hover;
+
+        void Hover(RaycastHit hit)
+        {
+            if (m_lastHit == hit.transform)
+            {
+                return;
+            }
+            m_lastHit = hit.transform;
+            if (m_lastHit is null)
+            {
+                m_hover = null;
+            }
+            else
+            {
+                m_hover = m_frameMap[hit.transform];
+                Debug.Log($"{m_hover.name} => {hit.distance}");
+            }
+        }
+
+        void Reorder(RectFrame hover, int i)
+        {
+            m_frames.Remove(hover);
+            m_frames.Insert(i, hover);
+            int z = 1;
+            foreach (var f in m_frames)
+            {
+                var p = f.transform.localPosition;
+                p.z = z++;
+                f.transform.localPosition = p;
+            }
+        }
+
+        RectFrame m_mouseLeft;
+
+        void LeftMouseDown()
+        {
+            if (m_hover is null)
+            {
+                m_mouseLeft = null;
+                return;
+            }
+
+            Reorder(m_hover, 0);
+            m_mouseLeft = m_hover;
+        }
+
+        void LeftMouseUp()
+        {
+            m_mouseLeft = null;
+        }
+
+        void LeftMouseDrag(Vector3 delta)
+        {
+            m_mouseLeft.transform.localPosition += delta;
+        }
+
+        void RightMouseDown()
+        {
+            if (m_hover is null)
+            {
+                return;
+            }
+
+            Reorder(m_hover, m_frames.Count - 1);
+        }
+
+        Vector3 m_mousePosition;
+
         void Update()
         {
-            SetScreenSize(Screen.width, Screen.height);
+            SetScreenSize();
+
+            var factor = 1.0f / m_dpi;
+            var delta = Input.mousePosition - m_mousePosition;
+            m_mousePosition = Input.mousePosition;
 
             // hover
+            var ray = m_ortho.ScreenPointToRay(Input.mousePosition);
+            Debug.DrawRay(ray.origin, ray.direction * 100, Color.yellow);
+
+            Hover(Physics.RaycastAll(ray).OrderBy(x => x.distance).FirstOrDefault());
 
             // cursor
 
             // click
+            if (Input.GetMouseButtonDown(0))
+            {
+                LeftMouseDown();
+            }
+            else
+            {
+                if (!(m_mouseLeft is null))
+                {
+                    LeftMouseDrag(delta * factor);
+                }
+            }
+
+            if (Input.GetMouseButtonUp(0))
+            {
+                LeftMouseUp();
+            }
+
+            if (Input.GetMouseButtonDown(1))
+            {
+                RightMouseDown();
+            }
 
             // drag
 
